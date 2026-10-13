@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>끝말잇기 봇</title>
+  <meta name="theme-color" content="#f2f5f1">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@500;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+  <header class="masthead">
+    <h1 class="title" aria-label="끝말잇기">
+      <span class="word" aria-hidden="true"><span class="cell">끝</span><span class="cell">말</span><span class="cell">잇</span><span class="cell link">기</span></span>
+    </h1>
+    <p id="status" class="status" role="status">사전을 읽는 중이에요…</p>
+    <button type="button" id="install" class="button quiet" hidden>앱으로 설치</button>
+    <p id="install-ios" class="note" hidden>공유 버튼을 누른 뒤 "홈 화면에 추가"를 고르면 앱으로 설치돼요.</p>
+  </header>
+
+  <div class="rulebox">
+    <div id="rulebar" class="rulebar" role="group" aria-label="룰"></div>
+    <p id="rule-note" class="note" role="status"></p>
+    <div id="trainbox" class="trainbox" hidden>
+      <div id="trainbar" class="rulebar" role="group" aria-label="봇이 배운 방식"></div>
+      <p id="train-note" class="note" role="status"></p>
+    </div>
+  </div>
+
+
+  <main inert>
+    <section id="panel-play">
+      <form id="setup" class="setup">
+        <fieldset class="choice">
+          <legend>난이도</legend>
+          <label><input type="radio" name="level" value="easy"><span>쉬움</span></label>
+          <label><input type="radio" name="level" value="normal" checked><span>보통</span></label>
+          <label><input type="radio" name="level" value="hard"><span>최강</span></label>
+        </fieldset>
+        <fieldset class="choice">
+          <legend>먼저 시작</legend>
+          <label><input type="radio" name="first" value="me" checked><span>나</span></label>
+          <label><input type="radio" name="first" value="bot"><span>봇</span></label>
+        </fieldset>
+        <fieldset class="rules">
+          <legend>쓸 수 있는 말</legend>
+          <label class="check"><input type="checkbox" name="phrases" checked><span>구 (띄어 쓰는 말을 붙인 것)</span></label>
+          <label class="check"><input type="checkbox" name="dialect" checked><span>방언</span></label>
+          <label class="check"><input type="checkbox" name="north" checked><span>북한어</span></label>
+          <label class="check"><input type="checkbox" name="old" checked><span>옛말</span></label>
+          <label class="check"><input type="checkbox" name="hanbang"><span>한방단어</span></label>
+        </fieldset>
+        <button type="submit" id="again" class="button">새 판 시작</button>
+      </form>
+
+      <ol id="chain" class="chain" aria-live="polite" aria-label="지금까지 나온 단어"></ol>
+      <p id="result" class="result" role="status" hidden></p>
+
+      <form id="move" class="move" autocomplete="off">
+        <label for="move-input" id="start-hint">아무 단어로나 시작하세요.</label>
+        <div class="row">
+          <input id="move-input" type="text" inputmode="text" lang="ko" aria-describedby="move-error" enterkeyhint="send">
+          <button type="submit" class="button">내기</button>
+          <button type="button" id="give-up" class="button quiet">포기</button>
+        </div>
+        <p id="move-error" class="error" role="alert"></p>
+      </form>
+    </section>
+
+  </main>
+
+  <footer class="colophon">
+    <p id="learned"></p>
+    <p>단어 자료: 국립국어원 우리말샘·표준국어대사전 (CC BY-SA 2.0 KR)</p>
+  </footer>
+
+  <script>
+    // 모듈 스크립트는 file:// 에서 아예 실행되지 않으므로 여기서 먼저 알린다.
+    if (location.protocol === 'file:') {
+      document.getElementById('status').textContent =
+        '파일을 직접 열면 사전을 읽을 수 없어요. 프로젝트 폴더에서 npm run serve 를 실행하고 나오는 주소로 열어 주세요.';
+      document.getElementById('status').classList.add('error');
+    }
+  </script>
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>

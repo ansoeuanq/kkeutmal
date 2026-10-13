@@ -1,0 +1,246 @@
+/* 원고지 공책: 서늘한 종이, 청록 칸, 형광펜, 빨간 색연필 */
+:root {
+  --paper: #f2f5f1;
+  --sheet: #fbfcfa;
+  --ink: #1b2422;
+  --muted: #55635f;
+  --line: #2f7f79;
+  --line-soft: #bfd6d2;
+  --teal-text: #1f6660;
+  --marker: #ffd84d;
+  --pencil: #c9372c;
+  --cell: 2.75rem;
+  --serif: 'Hahmlet', 'Noto Serif KR', 'Batang', serif;
+  --sans: 'IBM Plex Sans KR', 'Pretendard', 'Malgun Gothic', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0 auto;
+  max-width: 44rem;
+  padding: 0 1rem 2rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1rem/1.6 var(--sans);
+  word-break: keep-all;
+}
+
+[hidden] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+/* ── 원고지 칸 ── */
+.word { display: inline-flex; flex-wrap: wrap; padding: 1px 0 0 1px; }
+.cell {
+  display: grid;
+  place-items: center;
+  width: var(--cell);
+  height: var(--cell);
+  margin: -1px 0 0 -1px;
+  border: 1px solid var(--line);
+  background: var(--sheet);
+  font: 700 calc(var(--cell) * 0.52)/1 var(--serif);
+}
+.cell.link { background: linear-gradient(var(--sheet) 16%, var(--marker) 16% 86%, var(--sheet) 86%); }
+
+/* ── 머리 ── */
+.masthead { padding: 2.5rem 0 1.25rem; }
+.title { margin: 0; --cell: 4.25rem; }
+.status { margin: 0.9rem 0 0; color: var(--muted); max-width: 34em; }
+.status.error, .error { color: var(--pencil); font-weight: 500; }
+.masthead .button, .masthead .note { margin: 0.9rem 0 0; }
+
+/* 룰(칸) 고르기: 원고지 칸처럼 붙여 놓고 고른 칸에 형광펜 */
+.rulebox { margin-bottom: 1.25rem; }
+.rulebar { display: flex; flex-wrap: wrap; padding: 1px 0 0 1px; }
+.rulebar button {
+  min-height: 2.75rem;
+  margin: -1px 0 0 -1px;
+  padding: 0 0.9rem;
+  border: 1px solid var(--line);
+  background: var(--sheet);
+  color: var(--ink);
+  font: 500 1rem/1 var(--sans);
+  cursor: pointer;
+}
+.rulebar button[aria-pressed='true'] { background: var(--marker); font-weight: 600; }
+.rulebar button:focus-visible { position: relative; }
+.rulebox .note { margin: 0.5rem 0 0; font-size: 0.9rem; max-width: 44em; }
+.trainbox { margin-top: 0.9rem; }
+.trainbox .rulebar button { min-height: 2.5rem; font-size: 0.9rem; }
+/* 사전 룰과 쿵쿵따는 쓸 수 있는 말이 정해져 있다 */
+main[data-rule]:not([data-rule='free']) .rules { display: none; }
+
+.tabs { display: flex; gap: 1.5rem; border-bottom: 1px solid var(--line-soft); }
+.tabs button {
+  min-height: 2.75rem;
+  padding: 0 0.15rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: 600 1.05rem/1 var(--sans);
+  cursor: pointer;
+}
+.tabs button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--line); }
+
+main[inert] { opacity: 0.45; }
+[role='tabpanel'] { padding-top: 1.25rem; }
+
+/* ── 버튼·입력 ── */
+.button {
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--sheet);
+  font: 600 1rem/1 var(--sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.button:hover { background: #2c3a37; }
+.button.quiet { background: transparent; color: var(--ink); border-color: var(--line-soft); }
+.button.quiet:hover { border-color: var(--ink); }
+.button:disabled, input:disabled { opacity: 0.5; cursor: default; }
+
+input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--sheet);
+  color: var(--ink);
+  font: 700 1.2rem/1 var(--serif);
+}
+
+/* ── 판 설정 ── */
+.setup { display: flex; flex-wrap: wrap; align-items: end; gap: 0.9rem 1.25rem; }
+.choice { display: flex; margin: 0; padding: 0; border: 0; }
+.choice legend { padding: 0 0 0.3rem; color: var(--muted); font-size: 0.875rem; }
+.choice label { margin-left: -1px; cursor: pointer; }
+.choice input { position: absolute; opacity: 0; }
+.choice span {
+  display: grid;
+  place-items: center;
+  min-width: 3.5rem;
+  min-height: 2.75rem;
+  padding: 0 0.8rem;
+  border: 1px solid var(--line);
+  background: var(--sheet);
+}
+.choice input:checked + span { background: var(--marker); font-weight: 600; }
+.choice input:focus-visible + span { outline: 3px solid var(--ink); outline-offset: 2px; position: relative; }
+.rules { display: flex; flex-wrap: wrap; gap: 0 1.25rem; flex-basis: 100%; margin: 0; padding: 0; border: 0; }
+.rules legend { padding: 0; color: var(--muted); font-size: 0.875rem; }
+.check { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; cursor: pointer; }
+.check input { width: 1.25rem; height: 1.25rem; accent-color: var(--line); }
+.setup .button { margin-left: auto; }
+
+/* ── 단어 사슬 ── */
+.chain { display: grid; gap: 1.1rem; margin: 1.75rem 0 1.25rem; padding: 0; list-style: none; min-height: 6rem; }
+.chain:empty::before { content: '첫 단어를 기다리고 있어요.'; color: var(--muted); }
+.turn { display: grid; justify-items: start; gap: 0.25rem; }
+.turn.me { justify-items: end; }
+.turn.me .word { justify-content: flex-end; }
+.who { color: var(--muted); font-size: 0.875rem; }
+.tag { margin-left: 0.4rem; color: var(--teal-text); font-weight: 600; }
+.turn .word { animation: stamp 160ms ease-out; }
+@keyframes stamp { from { opacity: 0; transform: translateY(4px); } }
+
+.result { margin: 0 0 1.25rem; padding: 0.9rem 1rem; border-left: 4px solid var(--line); background: var(--sheet); font-weight: 500; }
+.result.lost { border-left-color: var(--pencil); }
+
+.move { position: sticky; bottom: 0; padding: 0.75rem 0 1rem; background: var(--paper); border-top: 1px solid var(--line-soft); }
+#hint-form.move { position: static; border-top: 0; padding-top: 0; }
+.move > label:first-child { display: block; margin-bottom: 0.4rem; font-weight: 500; }
+.row { display: flex; gap: 0.5rem; }
+.error { min-height: 1.6em; margin: 0.35rem 0 0; }
+
+/* ── 추천 ── */
+.note { color: var(--muted); margin: 0.75rem 0; }
+.missing { margin: 0.75rem 0 0; padding: 0.6rem 0.8rem; border-left: 4px solid var(--pencil); background: var(--sheet); font-weight: 500; }
+.hints { margin: 0.5rem 0 1.25rem; padding: 0; list-style: none; border-top: 1px solid var(--line-soft); }
+.hints li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.9rem; padding: 0.3rem 0; border-bottom: 1px solid var(--line-soft); }
+.hints .pick {
+  min-height: 2.75rem;
+  margin-right: auto;
+  padding: 0 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 700 1.25rem/1.2 var(--serif);
+  text-align: left;
+  cursor: pointer;
+}
+.hints .pick:hover { background: linear-gradient(transparent 55%, var(--marker) 55% 92%, transparent 92%); }
+.verdict { min-width: 2.6rem; font-weight: 600; }
+.verdict.win { color: var(--teal-text); }
+.verdict.risk { color: var(--pencil); }
+.meta { color: var(--muted); font-size: 0.9rem; }
+
+/* 구분 배지: 색과 함께 글자로도 구분한다 */
+.badge { padding: 0.05rem 0.45rem; border: 1px solid var(--line-soft); border-radius: 3px; background: var(--sheet); color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+.badge[data-kind='방언'] { border-color: var(--line); color: var(--teal-text); }
+.badge[data-kind='북한어'] { border-color: var(--pencil); color: var(--pencil); }
+.badge[data-kind='옛말'] { border-color: var(--ink); color: var(--ink); }
+.badge[data-kind='구'] { border-color: var(--marker); background: var(--marker); color: var(--ink); }
+.badge[data-kind='사전에 없음'] { border-style: dashed; }
+.badge[data-kind='품사'] { border-color: transparent; background: none; padding-left: 0.1rem; }
+.tag.part { color: var(--muted); font-weight: 400; }
+.hints .pick { margin-right: 0; }
+.hints .verdict { margin-left: auto; }
+.hints li:not(:has(.verdict)) .badge:last-child { margin-right: auto; }
+/* 단어 상세: 뜻, 예상 수순, 상대가 이을 수 있는 말 */
+.detail { margin: 0.25rem 0 1.5rem; }
+.detail h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 1rem 0 0.25rem; font: 700 1.75rem/1.3 var(--serif); }
+.detail h2 .badge, .detail h2 .verdict { font: 500 0.8rem/1.6 var(--sans); }
+.detail h2 .verdict { margin-left: 0; }
+.detail h3 { margin: 1.25rem 0 0.4rem; font: 600 1rem/1.4 var(--sans); }
+.def { margin: 0; color: var(--muted); max-width: 40em; }
+.hints .def { flex-basis: 100%; font-size: 0.9rem; }
+.hints .answer { margin-left: auto; font-size: 0.9rem; }
+.hints .answer b { font: 700 1.05rem/1.2 var(--serif); }
+.hints .answer .verdict { margin-left: 0; }
+.line { display: flex; flex-wrap: wrap; gap: 0.35rem 0; margin: 0; padding: 0; list-style: none; font: 700 1.1rem/1.5 var(--serif); }
+.line li { display: inline-flex; align-items: baseline; }
+.line li + li::before { content: '→'; margin: 0 0.5rem; color: var(--muted); font-family: var(--sans); font-weight: 400; }
+.line .who { margin-right: 0.3rem; font: 400 0.8rem/1 var(--sans); }
+.line .me { background: linear-gradient(transparent 55%, var(--marker) 55% 92%, transparent 92%); }
+.pages { display: flex; align-items: center; gap: 0.75rem; margin: 0.25rem 0 1.25rem; }
+.pages span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.def-toggle { margin-left: 0.5rem; padding: 0.1rem 0.5rem; border: 1px solid var(--line-soft); border-radius: 3px; background: none; color: var(--teal-text); font: 500 0.8rem/1.4 var(--sans); cursor: pointer; }
+.turn .def { max-width: 28em; font-size: 0.9rem; }
+.turn.me .def { text-align: right; }
+/* 단어는 긁어서 복사하지 못하게 한다 */
+.pick, .word, .cell, .line, .chips li, .detail h2, .hints .answer b { user-select: none; -webkit-user-select: none; }
+.chips .who { margin-right: 0.4rem; }
+
+.legend { margin: 0 0 1.75rem; font-size: 0.9rem; color: var(--muted); }
+.legend div { display: flex; gap: 0.75rem; }
+.legend dt { flex: none; width: 2.6rem; font-weight: 600; color: var(--ink); }
+.legend dd { margin: 0; }
+
+.used h2 { margin: 0 0 0.5rem; font: 600 1rem/1.4 var(--sans); }
+.chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.75rem; padding: 0; list-style: none; }
+.chips:empty::before { content: '아직 없어요.'; color: var(--muted); }
+.chips li { padding: 0.15rem 0.6rem; border: 1px solid var(--line-soft); background: var(--sheet); font-family: var(--serif); }
+
+.colophon { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 0.875rem; }
+.colophon p { margin: 0.2rem 0; }
+
+@media (max-width: 30rem) {
+  :root { --cell: 2.25rem; }
+  .title { --cell: 3.25rem; }
+  .masthead { padding-top: 1.5rem; }
+  .setup .button { margin-left: 0; width: 100%; }
+  .button { padding: 0 0.85rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn .word { animation: none; }
+}
