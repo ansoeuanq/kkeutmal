@@ -74,8 +74,22 @@
 
   </main>
 
+  <dialog id="name-dialog" class="name-dialog" aria-labelledby="name-title">
+    <form id="name-form" novalidate>
+      <h2 id="name-title">이름을 정해 주세요</h2>
+      <p class="note">승률 기록에 이 이름으로 나와요. 한 번 정하면 바꿀 수 없어요.</p>
+      <label for="name-input">이름 (1~12자)</label>
+      <input id="name-input" type="text" maxlength="12" autocomplete="nickname" lang="ko" aria-describedby="name-error" required>
+      <p id="name-error" class="error" role="alert"></p>
+      <button type="submit" class="button">이 이름으로 시작</button>
+    </form>
+  </dialog>
+
   <footer class="colophon">
+    <p id="player"></p>
     <p id="learned"></p>
+    <p>판이 끝나면 이름과 결과(이긴 쪽, 룰, 난이도, 나온 단어)를 모아 사람이 봇을 얼마나 이기는지 살펴요.</p>
+    <label class="check"><input type="checkbox" id="stats-off"><span>판 결과 보내지 않기</span></label>
     <p>단어 자료: 국립국어원 우리말샘·표준국어대사전 (CC BY-SA 2.0 KR)</p>
   </footer>
 

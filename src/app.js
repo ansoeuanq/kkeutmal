@@ -1,7 +1,8 @@
 // 화면 동작. 규칙과 수 선택은 engine.js, 학습은 learn.js 에 있다.
-import { buildDict, candidates, chooseMove, createContext, lastCharOf, posOf, shardOf, startsOf, validate } from './engine.js';
+import { buildDict, candidates, chooseMove, createContext, isEarly, lastCharOf, posOf, shardOf, startsOf, validate } from './engine.js';
 import { merge, parseModel, update } from './learn.js';
 import { RULES, contextOptions, modelFile, modelKey } from './rules.js';
+import { cleanName, createReporter } from './stats.js';
 
 const $ = (id) => document.getElementById(id);
 const TYPE_LABEL = ['', '방언', '북한어', '옛말'];
@@ -40,6 +41,13 @@ function loadSettings() {
 
 const settings = loadSettings();
 const saveSettings = () => storage.set(SETTINGS_KEY, JSON.stringify(settings));
+
+// ── 플레이어와 판 결과 모으기 ──
+// 처음 열 때 이름을 한 번 정한다(바꿀 수 없다). 같은 이름이 여럿일 수 있어 기기마다 무작위 번호도 둔다.
+const PLAYER_KEY = 'kkeutmal.player.v1';
+const reporter = createReporter({ storage, endpointList: 'https://ansoeuanq.github.io/kkeutmal/stats-endpoint.txt' });
+let player = null;
+try { player = JSON.parse(storage.get(PLAYER_KEY)); } catch { /* 처음 온 사람 */ }
 
 let dict;
 const fileModels = {}; // 미리 학습해 둔 모델
@@ -107,6 +115,8 @@ function newGame(event) {
   game = {
     ctx: play.ctx,
     level: settings.level,
+    first: settings.first,
+    options: settings.rule === 'free' ? rules : null, // 자유 칸에서 고른 '쓸 수 있는 말'
     key: play.key,
     model: modelFor(play.key),
     used: new Set(),
@@ -151,14 +161,18 @@ function setBusy(busy) {
   for (const control of $('move').querySelectorAll('input, button')) control.disabled = busy;
 }
 
+// 처음 10단어(각자 5번)는 한방단어를 낼 수 없다 (한방단어를 허용하는 규칙에서만 달라진다)
+const early = () => ({ early: isEarly(game.used) });
+
 function myTurn() {
-  if (!candidates(game.ctx, game.last, game.used).length) {
-    finish('bot', `${startText(game.last)} 시작하는 단어가 사전에 남아 있지 않아요.`);
+  if (!candidates(game.ctx, game.last, game.used, early()).length) {
+    finish('bot', `${startText(game.last)} 시작하는 단어가 사전에 남아 있지 않아요.`, 'me-stuck');
     return;
   }
-  $('start-hint').textContent = game.last === null
+  $('start-hint').textContent = (game.last === null
     ? '아무 단어로나 시작하세요.'
-    : `${startText(game.last)} 시작하는 단어를 내세요.`;
+    : `${startText(game.last)} 시작하는 단어를 내세요.`)
+    + (game.ctx.hanbang && isEarly(game.used) ? ' 처음 5번은 한방단어를 쓸 수 없어요.' : '');
   setBusy(false);
   $('move-input').focus();
 }
@@ -169,9 +183,9 @@ function botTurn() {
   $('start-hint').textContent = '봇이 생각하고 있어요…';
   setTimeout(() => {
     if (current !== game) return; // 그사이 새 판을 시작했다
-    const word = chooseMove(game.ctx, game.last, game.used, game.model, game.level);
+    const word = chooseMove(game.ctx, game.last, game.used, game.model, game.level, early());
     if (word === null) {
-      finish('me', `봇이 ${startText(game.last)} 시작하는 단어를 찾지 못했어요.`);
+      finish('me', `봇이 ${startText(game.last)} 시작하는 단어를 찾지 못했어요.`, 'bot-stuck');
       return;
     }
     place(word, 'bot');
@@ -190,13 +204,14 @@ const REASON = {
   WRONG_START: () => `${startText(game.last)} 시작해야 해요.`,
   USED: () => '이미 나온 단어예요.',
   HANBANG: () => '한방단어는 쓸 수 없어요.',
+  EARLY_HANBANG: () => '처음 5번은 한방단어를 쓸 수 없어요.',
 };
 
 function submitMove(event) {
   event.preventDefault();
   const word = $('move-input').value.trim();
   if (!word) return;
-  const reason = validate(game.ctx, word, game.last, game.used);
+  const reason = validate(game.ctx, word, game.last, game.used, early());
   if (reason) {
     $('move-error').textContent = REASON[reason](word);
     $('move-input').select();
@@ -210,13 +225,15 @@ function submitMove(event) {
 
 function giveUp() {
   const type = (word) => game.ctx.dict.types.get(word);
-  const examples = game.last === null ? [] : candidates(game.ctx, game.last, game.used)
+  const examples = game.last === null ? [] : candidates(game.ctx, game.last, game.used, early())
     .sort((a, b) => type(a) - type(b)).slice(0, 3);
-  finish('bot', examples.length ? `낼 수 있었던 단어: ${examples.join(', ')}` : '포기했어요.');
+  finish('bot', examples.length ? `낼 수 있었던 단어: ${examples.join(', ')}` : '포기했어요.', 'give-up');
 }
 
-function finish(winner, reason) {
+// end: 'me-stuck'(내가 이을 말이 없음) | 'bot-stuck'(봇이 이을 말이 없음) | 'give-up'(포기)
+function finish(winner, reason, end) {
   const loser = winner === 'me' ? 'bot' : 'me';
+  report(winner, end);
   update(localModels[game.key], game.given[winner], game.given[loser]);
   storage.set(storageKey(game.key), JSON.stringify(localModels[game.key]));
   showLearned();
@@ -225,6 +242,53 @@ function finish(winner, reason) {
   $('result').hidden = false;
   $('move').hidden = true;
   $('again').focus();
+}
+
+// 끝난 판을 승률 서버로 보낼 목록에 넣고 보낸다. 서버가 꺼져 있으면 기기에 남았다가 다음에 간다.
+function report(winner, end) {
+  if (!player) return;
+  reporter.enqueue({
+    v: 1,
+    id: player.id,
+    name: player.name,
+    at: new Date().toISOString(),
+    rule: settings.rule,
+    trained: RULES[settings.rule].sparring ? settings.trained : null,
+    level: game.level,
+    first: game.first,
+    options: game.options,
+    winner,
+    end,
+    words: [...game.used], // 나온 순서대로
+    client: /; wv\)/.test(navigator.userAgent) ? 'app' : 'web', // 안드로이드 앱(웹뷰)인지
+  });
+  reporter.flush();
+}
+
+function showPlayer() {
+  $('player').textContent = player ? `플레이어: ${player.name}` : '';
+  $('stats-off').checked = reporter.isOff();
+}
+
+// 이름을 정할 때까지 닫히지 않는 창. 정한 이름은 바꿀 수 없다.
+function askName() {
+  const dialog = $('name-dialog');
+  dialog.addEventListener('cancel', (event) => event.preventDefault()); // Esc 로 닫지 못하게
+  $('name-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const name = cleanName($('name-input').value);
+    if (!name) {
+      $('name-error').textContent = '1~12자의 한글·영문·숫자로 정해 주세요. 공백, _, - 도 쓸 수 있어요.';
+      $('name-input').focus();
+      return;
+    }
+    player = { id: crypto.randomUUID(), name };
+    storage.set(PLAYER_KEY, JSON.stringify(player));
+    showPlayer();
+    dialog.close();
+    $('move-input').focus();
+  });
+  dialog.showModal();
 }
 
 // ── 뜻풀이 ──
@@ -397,6 +461,11 @@ async function init() {
   document.querySelector('main').inert = false;
   showTab(settings.tab);
   newGame();
+  $('stats-off').addEventListener('change', (event) => reporter.setOff(event.target.checked));
+  window.addEventListener('online', () => reporter.flush());
+  showPlayer();
+  if (!player) askName();
+  reporter.flush(); // 전에 못 보낸 판
   // 서비스 워커가 켜지기 전에 받은 파일(이 화면, 스크립트, 사전, 모델)도 저장해 두게 목록을 넘긴다
   navigator.serviceWorker?.ready.then(({ active }) => active.postMessage(
     [location.href, ...performance.getEntriesByType('resource').map((entry) => entry.name)],

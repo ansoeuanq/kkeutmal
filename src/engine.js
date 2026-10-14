@@ -125,13 +125,19 @@ function analyze(dict, hanbang, dead) {
 
 const allowed = (ctx, word) => ctx.hanbang || !ctx.dead.has(lastCharOf(word));
 
-export function candidates(ctx, lastChar, used) {
+// 판의 처음 10단어(사람·봇 각자 5번) 동안은 한방단어를 낼 수 없다. 한방단어를 허용하는 규칙에서만 달라진다.
+// 대결 화면과 자가 대국이 { early: isEarly(used) } 로 넘긴다. 추천 탭은 다른 게임용이라 넘기지 않는다.
+export const EARLY_PLIES = 10;
+export const isEarly = (used) => used.size < EARLY_PLIES;
+const earlyBlocked = (ctx, end, early) => early && ctx.dead.has(end);
+
+export function candidates(ctx, lastChar, used, { early = false } = {}) {
   const pools = lastChar === null
     ? ctx.dict.byFirst.values()
     : startsOf(lastChar).map((c) => ctx.dict.byFirst.get(c) ?? []);
   const out = [];
   for (const pool of pools) {
-    for (const word of pool) if (!used.has(word) && allowed(ctx, word)) out.push(word);
+    for (const word of pool) if (!used.has(word) && allowed(ctx, word) && !earlyBlocked(ctx, lastCharOf(word), early)) out.push(word);
   }
   return out;
 }
@@ -139,7 +145,7 @@ export function candidates(ctx, lastChar, used) {
 // 지금 룰의 사전에 있는 말인가. 옵션으로 꺼 둔 종류(방언 등)라도 사전에 있으면 참이다.
 export const knows = (ctx, word) => ctx.dict.types.has(word) && ctx.inRule(word);
 
-export function validate(ctx, input, lastChar, used) {
+export function validate(ctx, input, lastChar, used, { early = false } = {}) {
   const word = input.trim();
   const code = ctx.dict.types.get(word);
   if (code === undefined) return 'NOT_IN_DICT';
@@ -148,6 +154,7 @@ export function validate(ctx, input, lastChar, used) {
   if (lastChar !== null && !startsOf(lastChar).includes(word[0])) return 'WRONG_START';
   if (used.has(word)) return 'USED';
   if (!allowed(ctx, word)) return 'HANBANG';
+  if (earlyBlocked(ctx, lastCharOf(word), early)) return 'EARLY_HANBANG';
   return null;
 }
 
@@ -224,13 +231,14 @@ function replies(ctx, end) {
 }
 
 // 낼 수 있는 단어를 끝 글자로 묶어 좋은 순서로: 필승(빠른 것) → 미정(점수 높은 것) → 위험(점수 높은 것, 같으면 오래 버티는 것)
-export function rankEnds(ctx, lastChar, used, model, { explore = false, standardOnly = false } = {}) {
+export function rankEnds(ctx, lastChar, used, model, { explore = false, standardOnly = false, early = false } = {}) {
   const value = scorer(model, explore);
   const ends = endsFor(ctx, lastChar);
   const out = [];
   for (const verdict of ['win', 'open', 'risk']) {
     const ranked = [];
     for (const group of ends[verdict]) {
+      if (earlyBlocked(ctx, group.end, early)) continue;
       const words = unusedWords(ctx, group, used, standardOnly);
       if (words.length) ranked.push({ end: group.end, verdict, depth: group.depth, score: value(group.end), words });
     }
@@ -276,10 +284,11 @@ function solve(ctx, ch, used, depth) {
 
 // 최강의 선택: 필승 분석의 필승 → 읽어서 이기는 길 → 모르는 길(학습 점수 높은 것, 미정 먼저) → 읽어서 지는 길.
 // rankEnds 를 통째로 만들지 않고, 정렬해 둔 순서를 따라가며 필요한 묶음만 본다.
-function bestEnd(ctx, lastChar, used, model, explore, standardOnly, depth) {
+// ponytail: 초반(early)에는 한방단어 묶음만 건너뛴다. 6수 읽기 안에서는 초반 제한을 따지지 않는 근사다.
+function bestEnd(ctx, lastChar, used, model, explore, standardOnly, depth, early) {
   const value = scorer(model, explore);
   const ends = endsFor(ctx, lastChar);
-  const win = ends.win.find((group) => hasUnused(ctx, group, used, standardOnly));
+  const win = ends.win.find((group) => !earlyBlocked(ctx, group.end, early) && hasUnused(ctx, group, used, standardOnly));
   if (win) return win;
   let lost = null;
   let lostScore = -Infinity;
@@ -287,6 +296,7 @@ function bestEnd(ctx, lastChar, used, model, explore, standardOnly, depth) {
     let best = null;
     let bestScore = -Infinity;
     for (const group of groups) {
+      if (earlyBlocked(ctx, group.end, early)) continue;
       let result = 0;
       if (depth > 0 && (group.fan ??= endsFor(ctx, group.end).all.length) <= STATIC_LIMIT) {
         const word = firstUnused(group, used);
@@ -310,15 +320,15 @@ function bestEnd(ctx, lastChar, used, model, explore, standardOnly, depth) {
 
 const PLAYABLE = 100; // 이을 표준어가 이만큼은 있어야 사람이 이을 만한 글자로 본다
 
-export function chooseMove(ctx, lastChar, used, model, level, { explore = false, rng = Math.random, standardOnly = false, playable = PLAYABLE, depth = DEPTH } = {}) {
+export function chooseMove(ctx, lastChar, used, model, level, { explore = false, rng = Math.random, standardOnly = false, playable = PLAYABLE, depth = DEPTH, early = false } = {}) {
   const pick = (list) => list[Math.floor(rng() * list.length)];
   if (level === 'hard') {
     // 표준어만 아는 상대는 읽지 않는다 (읽기는 모든 말을 안다고 가정한다)
-    const best = bestEnd(ctx, lastChar, used, model, explore, standardOnly, standardOnly ? 0 : depth);
+    const best = bestEnd(ctx, lastChar, used, model, explore, standardOnly, standardOnly ? 0 : depth, early);
     return best ? pick(unusedWords(ctx, best, used, standardOnly)) : null;
   }
   // 쉬움·보통은 사람이 이을 만한 글자만 넘긴다. 그런 글자가 없을 때만 가진 수 전체에서 고른다.
-  const all = rankEnds(ctx, lastChar, used, model, { explore, standardOnly: level === 'easy' });
+  const all = rankEnds(ctx, lastChar, used, model, { explore, standardOnly: level === 'easy', early });
   if (!all.length) return null;
   const friendly = all.filter((g) => replies(ctx, g.end) >= playable);
   const ends = friendly.length ? friendly : all;

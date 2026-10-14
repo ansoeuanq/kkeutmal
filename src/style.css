@@ -244,3 +244,13 @@ input[type='text'] {
 @media (prefers-reduced-motion: reduce) {
   .turn .word { animation: none; }
 }
+
+/* ── 이름 정하기 (처음 한 번) ── */
+.name-dialog { width: min(26rem, calc(100vw - 2rem)); box-sizing: border-box; padding: 1.5rem; border: 1px solid var(--line); background: var(--sheet); color: var(--ink); }
+.name-dialog::backdrop { background: rgb(27 36 34 / 0.5); }
+.name-dialog h2 { margin: 0 0 0.5rem; font: 700 1.35rem/1.3 var(--serif); }
+.name-dialog .note { margin: 0 0 1rem; }
+.name-dialog label { display: block; font-weight: 600; margin-bottom: 0.4rem; }
+.name-dialog input { width: 100%; box-sizing: border-box; min-height: 2.75rem; padding: 0 0.75rem; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font: inherit; font-size: 1.1rem; }
+.name-dialog .error { min-height: 1.4em; margin: 0.4rem 0 0.6rem; font-size: 0.9rem; }
+.name-dialog .button { width: 100%; }
