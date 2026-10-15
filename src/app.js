@@ -9,17 +9,12 @@ const $ = (id) => document.getElementById(id);
 const TYPE_LABEL = ['', '방언', '북한어', '옛말'];
 // 구분 코드 → 표시할 이름들. 구는 구분 코드에 4가 더해져 있다.
 const kinds = (code) => [TYPE_LABEL[code & 3], code >= 4 ? '구' : ''].filter(Boolean);
-// 룰마다 좋은 글자가 달라 모델을 따로 둔다. 스파링으로 배운 모델이 따로 있는 칸은 '<룰>-sparring' 이 하나 더 있다.
-const MODEL_KEYS = Object.entries(RULES).flatMap(([rule, def]) => (def.sparring ? [rule, `${rule}-sparring`] : [rule]));
-// 봇이 배운 방식. 스파링 모델이 있는 칸에서만 고를 수 있다.
-const TRAINED = {
-  self: { name: '자가 대국으로 배운 봇', note: '모든 말을 아는 상대와 두며 배웠어요. 봇끼리의 대결에서 강해요.' },
-  sparring: { name: '스파링으로 배운 봇', note: '표준어만 아는 상대와 두며 배웠어요. 사람처럼 아는 말이 한정된 상대에게 강해요.' },
-};
-// 이 브라우저에 쌓는 누적의 저장 이름. 형용사·부사를 허용하며 사전이 바뀌어 v2 부터 새로 쌓는다.
+// 룰마다 좋은 글자가 달라 모델을 따로 둔다. 자가 대국과 스파링으로 배운 것을 합친 모델 하나다.
+const MODEL_KEYS = Object.keys(RULES);
+// 이 브라우저에 쌓는 누적의 저장 이름. 사전이 바뀌어 v2 부터 새로 쌓았다.
 const storageKey = (key) => `kkeutmal.model.${key}.v2`;
 const SETTINGS_KEY = 'kkeutmal.settings.v1';
-const CHOICES = { level: ['easy', 'normal', 'hard'], first: ['me', 'bot'], tab: ['play', 'hint'], rule: Object.keys(RULES), trained: Object.keys(TRAINED) };
+const CHOICES = { level: ['easy', 'normal', 'hard'], first: ['me', 'bot'], tab: ['play', 'hint'], rule: Object.keys(RULES) };
 
 // 저장소가 막혀 있어도(사생활 보호 모드 등) 게임은 그대로 되어야 한다.
 const storage = {
@@ -28,7 +23,7 @@ const storage = {
 };
 
 function loadSettings() {
-  const settings = { level: 'normal', first: 'me', tab: 'play', rule: Object.keys(RULES)[0], trained: 'self' };
+  const settings = { level: 'normal', first: 'me', tab: 'play', rule: Object.keys(RULES)[0] };
   try {
     const saved = JSON.parse(storage.get(SETTINGS_KEY)) ?? {};
     for (const [key, allowed] of Object.entries(CHOICES)) if (allowed.includes(saved[key])) settings[key] = saved[key];
@@ -58,7 +53,7 @@ function playOf() {
     if (contexts.size >= 2) contexts.delete(contexts.keys().next().value); // 걸러 낸 사전은 크므로 둘만 둔다
     contexts.set(settings.rule, createContext(dict, contextOptions(dict, settings.rule)));
   }
-  return { ctx: contexts.get(settings.rule), key: modelKey(settings.rule, settings.trained === 'sparring') };
+  return { ctx: contexts.get(settings.rule), key: modelKey(settings.rule) };
 }
 
 function el(tag, props = {}, ...children) {
@@ -87,8 +82,7 @@ function wordCells(word, linkFirst) {
 function showLearned() {
   const n = (count) => count.toLocaleString('ko-KR');
   const { key } = playOf();
-  const how = RULES[settings.rule].sparring ? `(${key.endsWith('-sparring') ? '스파링' : '자가 대국'})` : '';
-  $('learned').textContent = `봇이 배운 판: ${RULES[settings.rule].name}${how} ${n(fileModels[key].games)}판, 이 브라우저에서 ${n(localModels[key].games)}판`;
+  $('learned').textContent = `봇이 배운 판: ${RULES[settings.rule].name} ${n(fileModels[key].games)}판, 이 브라우저에서 ${n(localModels[key].games)}판`;
 }
 
 // ── 대결 ──
@@ -127,6 +121,8 @@ function newGame(event) {
 function place(word, who) {
   const linkFirst = game.last !== null;
   game.used.add(word);
+  game.lastMove = Date.now();
+  if (game.used.size === 1) sendPlaying(); // 판이 시작됐다
   game.last = lastCharOf(word);
   game.given[who].push(game.last);
   lockHintTab();
@@ -227,6 +223,7 @@ function finish(winner, reason, end) {
   game.over = true;
   lockHintTab();
   report(winner, end);
+  checkVersion(); // 판 도중이라 미뤄 둔 업데이트가 있으면 이제 보여 준다
   update(localModels[game.key], game.given[winner], game.given[loser]);
   storage.set(storageKey(game.key), JSON.stringify(localModels[game.key]));
   showLearned();
@@ -247,7 +244,7 @@ function report(winner, end) {
     name: player.name,
     at: new Date().toISOString(),
     rule: settings.rule,
-    trained: RULES[settings.rule].sparring ? settings.trained : null,
+    trained: null, // 자가 대국과 스파링을 합친 봇 하나라 학습 방식을 따로 적지 않는다
     level: game.level,
     first: game.first,
     winner,
@@ -335,9 +332,12 @@ function showTab(name) {
 }
 
 // 봇과 대결하는 동안(첫 단어가 나온 뒤 판이 끝나기 전)에는 추천 탭에 들어갈 수 없다.
+// 판이 진행 중인가: 첫 단어가 나왔고 아직 끝나지 않았다.
+const inProgress = () => Boolean(game) && game.used.size > 0 && !game.over;
+
 function lockHintTab() {
   if (!hints) return;
-  const locked = game.used.size > 0 && !game.over;
+  const locked = inProgress();
   $('tab-hint').disabled = locked;
   $('tab-hint').title = locked ? '대결이 끝나면 볼 수 있어요' : '';
 }
@@ -354,28 +354,6 @@ function showRule(rule) {
   }
   $('rule-note').textContent = RULES[rule].note;
   $('allowed').textContent = RULES[rule].allowed; // 맨 위에 '명사, 형용사, 부사 사용 가능'처럼 보여 준다
-  $('trainbox').hidden = !RULES[rule].sparring; // 모델이 하나뿐인 칸에서는 고를 것이 없다
-  showTrained(settings.trained);
-}
-
-// 봇이 배운 방식(자가 대국 / 스파링)을 고른다. 같은 룰이라도 참고하는 승률표가 달라진다.
-function showTrained(kind) {
-  settings.trained = kind;
-  saveSettings();
-  for (const button of $('trainbar').querySelectorAll('button')) button.setAttribute('aria-pressed', button.value === kind);
-  $('train-note').textContent = TRAINED[kind].note;
-}
-
-function buildTrainBar() {
-  $('trainbar').replaceChildren(...Object.entries(TRAINED).map(([kind, { name }]) => {
-    const button = el('button', { type: 'button', value: kind, textContent: name });
-    button.addEventListener('click', () => {
-      showTrained(kind);
-      newGame();
-      hints?.refresh();
-    });
-    return button;
-  }));
 }
 
 function buildRuleBar() {
@@ -413,6 +391,7 @@ function wire() {
 // ── 업데이트 잠금 ──
 // 배포할 때 공개 사이트의 version.json 을 먼저 잠그고(locked), 새 파일을 올리며 새 버전으로 푼다(tools/deploy.mjs).
 // 잠겨 있거나 이 화면이 옛 버전이면 게임을 막는다. 읽지 못하면(오프라인, 개발 중) 막지 않는다.
+// 판 도중이면 막지 않고 미뤘다가, 판이 끝나면(finish) 다시 확인해 막는다.
 async function checkVersion() {
   if (VERSION === 'dev') return;
   let live;
@@ -421,9 +400,17 @@ async function checkVersion() {
     if (!response.ok) return;
     live = await response.json();
   } catch { return; }
+  if (inProgress() && (live.locked || live.version !== VERSION)) return;
   if (live.locked) showLock('업데이트 중이에요', '앱과 웹을 새 버전으로 바꾸고 있어요. 잠시 뒤에 다시 확인해 주세요.', '다시 확인', checkVersion);
   else if (live.version !== VERSION) showLock('새 버전이 나왔어요', '새로 고친 뒤에 계속할 수 있어요.', '새로 고침', () => location.reload());
   else if ($('lock-dialog').open) $('lock-dialog').close();
+}
+
+// 판 도중이라는 신호를 승률 서버로 보낸다(30초마다). 배포 도구는 이 신호가 끊길 때까지(판이 끝날 때까지) 기다렸다가 올린다.
+// 화면이 가려져 있거나 10분 넘게 수를 두지 않은 판은 보내지 않는다(열어 둔 채 떠난 판이 배포를 막지 않게).
+function sendPlaying() {
+  if (!player || !inProgress() || document.hidden || Date.now() - game.lastMove > 10 * 60 * 1000) return;
+  reporter.playing({ id: player.id, ver: VERSION });
 }
 
 function showLock(title, text, action, onClick) {
@@ -481,7 +468,6 @@ async function init() {
   // 추천 화면 코드는 첫 화면에 추천 탭이 있을 때만 불러온다
   if ($('panel-hint')) hints = (await import('./hint.js')).setupHints({ $, el, settings, playOf, modelFor, startText, fillDef, TYPE_LABEL });
   buildRuleBar();
-  buildTrainBar();
   showRule(settings.rule);
   wire();
   document.querySelector('main').inert = false;
@@ -495,6 +481,7 @@ async function init() {
   $('lock-dialog').addEventListener('cancel', (event) => event.preventDefault()); // Esc 로 닫지 못하게
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
   setInterval(checkVersion, 2 * 60 * 1000);
+  setInterval(sendPlaying, 30 * 1000);
   // 서비스 워커가 켜지기 전에 받은 파일(이 화면, 스크립트, 사전, 모델)도 저장해 두게 목록을 넘긴다
   navigator.serviceWorker?.ready.then(({ active }) => active.postMessage(
     [location.href, ...performance.getEntriesByType('resource').map((entry) => entry.name)],

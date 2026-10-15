@@ -42,6 +42,14 @@ export function merge(a, b) {
   return out;
 }
 
+// a 의 통계에 w 를 곱해 b 에 더한다. 자가 대국 모델(a)과 스파링 모델(b)을 봇 하나로 합칠 때 쓴다(README "학습").
+export function blend(a, b, w) {
+  const out = merge(emptyModel(), b);
+  out.games += a.games;
+  for (const [ch, [n, v]] of Object.entries(a.chars)) add(out, ch, Math.round(n * w), Math.round(v * w));
+  return out;
+}
+
 // 같은 base 에서 출발해 따로 배운 모델들을 합친다: base + Σ(part − base)
 export function combine(base, parts) {
   const out = merge(base, emptyModel());

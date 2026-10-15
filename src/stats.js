@@ -52,6 +52,15 @@ export function createReporter({ storage, fetch = globalThis.fetch, endpointList
       flushing ??= send().catch(() => {}).finally(() => { flushing = null; });
       return flushing;
     },
+    // 판 도중이라는 신호 { id, ver }. 배포 도구가 판이 끝나기를 기다리는 데 쓴다. 쌓아 두지 않고, 못 보내면 그만이다.
+    async playing(info) {
+      if (isOff()) return;
+      try {
+        const base = (await (await fetch(`${endpointList}?t=${Date.now()}`, { cache: 'no-store' })).text()).trim();
+        if (!/^https:\/\/[\w.-]+$/.test(base)) return;
+        await fetch(`${base}/api/playing`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(info) });
+      } catch { /* 다음 신호에 다시 */ }
+    },
     pending: () => read().length,
     isOff,
     setOff(off) {

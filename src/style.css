@@ -70,8 +70,6 @@ body {
 .rulebar button[aria-pressed='true'] { background: var(--marker); font-weight: 600; }
 .rulebar button:focus-visible { position: relative; }
 .rulebox .note { margin: 0.5rem 0 0; font-size: 0.9rem; max-width: 44em; }
-.trainbox { margin-top: 0.9rem; }
-.trainbox .rulebar button { min-height: 2.5rem; font-size: 0.9rem; }
 /* 사전 룰과 쿵쿵따는 쓸 수 있는 말이 정해져 있다 */
 
 .tabs { display: flex; gap: 1.5rem; border-bottom: 1px solid var(--line-soft); }
