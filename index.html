@@ -18,6 +18,7 @@
     <h1 class="title" aria-label="끝말잇기">
       <span class="word" aria-hidden="true"><span class="cell">끝</span><span class="cell">말</span><span class="cell">잇</span><span class="cell link">기</span></span>
     </h1>
+    <p id="allowed" class="allowed" role="status"></p>
     <p id="status" class="status" role="status">사전을 읽는 중이에요…</p>
     <button type="button" id="install" class="button quiet" hidden>앱으로 설치</button>
     <p id="install-ios" class="note" hidden>공유 버튼을 누른 뒤 "홈 화면에 추가"를 고르면 앱으로 설치돼요.</p>
@@ -47,14 +48,6 @@
           <label><input type="radio" name="first" value="me" checked><span>나</span></label>
           <label><input type="radio" name="first" value="bot"><span>봇</span></label>
         </fieldset>
-        <fieldset class="rules">
-          <legend>쓸 수 있는 말</legend>
-          <label class="check"><input type="checkbox" name="phrases" checked><span>구 (띄어 쓰는 말을 붙인 것)</span></label>
-          <label class="check"><input type="checkbox" name="dialect" checked><span>방언</span></label>
-          <label class="check"><input type="checkbox" name="north" checked><span>북한어</span></label>
-          <label class="check"><input type="checkbox" name="old" checked><span>옛말</span></label>
-          <label class="check"><input type="checkbox" name="hanbang"><span>한방단어</span></label>
-        </fieldset>
         <button type="submit" id="again" class="button">새 판 시작</button>
       </form>
 
@@ -83,6 +76,13 @@
       <p id="name-error" class="error" role="alert"></p>
       <button type="submit" class="button">이 이름으로 시작</button>
     </form>
+  </dialog>
+
+  <!-- 업데이트 중이거나 옛 버전이면 닫을 수 없게 띄운다 (src/app.js 의 checkVersion) -->
+  <dialog id="lock-dialog" class="name-dialog" aria-labelledby="lock-title" aria-describedby="lock-text">
+    <h2 id="lock-title"></h2>
+    <p id="lock-text" class="note"></p>
+    <button type="button" id="lock-action" class="button"></button>
   </dialog>
 
   <footer class="colophon">

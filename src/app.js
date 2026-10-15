@@ -3,23 +3,21 @@ import { buildDict, candidates, chooseMove, createContext, isEarly, lastCharOf, 
 import { merge, parseModel, update } from './learn.js';
 import { RULES, contextOptions, modelFile, modelKey } from './rules.js';
 import { cleanName, createReporter } from './stats.js';
+import { VERSION } from './version.js';
 
 const $ = (id) => document.getElementById(id);
 const TYPE_LABEL = ['', '방언', '북한어', '옛말'];
 // 구분 코드 → 표시할 이름들. 구는 구분 코드에 4가 더해져 있다.
 const kinds = (code) => [TYPE_LABEL[code & 3], code >= 4 ? '구' : ''].filter(Boolean);
-const RULE_NAMES = ['phrases', 'dialect', 'north', 'old', 'hanbang'];
-// 룰마다(자유 칸은 한방단어 허용 여부로도) 좋은 글자가 달라 모델을 따로 둔다.
-// 스파링으로 배운 모델이 따로 있는 칸은 '<룰>-sparring' 이 하나 더 있다.
-const MODEL_KEYS = ['free', 'free-hanbang', ...Object.entries(RULES).filter(([rule]) => rule !== 'free')
-  .flatMap(([rule, def]) => (def.sparring ? [rule, `${rule}-sparring`] : [rule]))];
+// 룰마다 좋은 글자가 달라 모델을 따로 둔다. 스파링으로 배운 모델이 따로 있는 칸은 '<룰>-sparring' 이 하나 더 있다.
+const MODEL_KEYS = Object.entries(RULES).flatMap(([rule, def]) => (def.sparring ? [rule, `${rule}-sparring`] : [rule]));
 // 봇이 배운 방식. 스파링 모델이 있는 칸에서만 고를 수 있다.
 const TRAINED = {
   self: { name: '자가 대국으로 배운 봇', note: '모든 말을 아는 상대와 두며 배웠어요. 봇끼리의 대결에서 강해요.' },
   sparring: { name: '스파링으로 배운 봇', note: '표준어만 아는 상대와 두며 배웠어요. 사람처럼 아는 말이 한정된 상대에게 강해요.' },
 };
-// 이 브라우저에 쌓는 누적의 저장 이름. 자유 칸의 두 이름은 예전에 쓰던 것을 그대로 쓴다.
-const storageKey = (key) => ({ free: 'kkeutmal.model.v1', 'free-hanbang': 'kkeutmal.model.hanbang.v1' }[key] ?? `kkeutmal.model.${key}.v1`);
+// 이 브라우저에 쌓는 누적의 저장 이름. 형용사·부사를 허용하며 사전이 바뀌어 v2 부터 새로 쌓는다.
+const storageKey = (key) => `kkeutmal.model.${key}.v2`;
 const SETTINGS_KEY = 'kkeutmal.settings.v1';
 const CHOICES = { level: ['easy', 'normal', 'hard'], first: ['me', 'bot'], tab: ['play', 'hint'], rule: Object.keys(RULES), trained: Object.keys(TRAINED) };
 
@@ -30,12 +28,12 @@ const storage = {
 };
 
 function loadSettings() {
-  const settings = { level: 'normal', first: 'me', tab: 'play', rule: 'free', trained: 'self', phrases: true, dialect: true, north: true, old: true, hanbang: false };
+  const settings = { level: 'normal', first: 'me', tab: 'play', rule: Object.keys(RULES)[0], trained: 'self' };
   try {
     const saved = JSON.parse(storage.get(SETTINGS_KEY)) ?? {};
     for (const [key, allowed] of Object.entries(CHOICES)) if (allowed.includes(saved[key])) settings[key] = saved[key];
-    for (const name of RULE_NAMES) if (typeof saved[name] === 'boolean') settings[name] = saved[name];
   } catch { /* 깨진 값은 기본값으로 */ }
+  settings.first = 'me'; // 처음 들어올 때는 늘 플레이어가 먼저 한다
   return settings;
 }
 
@@ -53,20 +51,14 @@ let dict;
 const fileModels = {}; // 미리 학습해 둔 모델
 const localModels = {}; // 이 브라우저에서 사람과 둔 판의 누적
 const modelFor = (key) => merge(fileModels[key], localModels[key]);
-// 폼의 '쓸 수 있는 말' 체크 상태 (자유 칸에서만 쓴다)
-const rulesOf = (form) => Object.fromEntries(RULE_NAMES.map((name) => [name, form.elements[name].checked]));
 const contexts = new Map();
-// 지금 고른 룰(자유 칸이면 폼의 옵션까지)로 정해지는 판의 조건: 쓸 사전(ctx)과 모델 이름(key)
-function playOf(form) {
-  const boxes = rulesOf(form);
-  const exclude = [boxes.dialect ? 0 : 1, boxes.north ? 0 : 2, boxes.old ? 0 : 3].filter(Boolean);
-  const options = contextOptions(dict, settings.rule, { hanbang: boxes.hanbang, phrases: boxes.phrases, exclude });
-  const cacheKey = settings.rule === 'free' ? JSON.stringify(boxes) : settings.rule;
-  if (!contexts.has(cacheKey)) {
-    if (contexts.size >= 2) contexts.delete(contexts.keys().next().value); // 걸러 낸 사전은 크므로 탭마다 하나씩만 둔다
-    contexts.set(cacheKey, createContext(dict, options));
+// 지금 고른 룰로 정해지는 판의 조건: 쓸 사전(ctx)과 모델 이름(key)
+function playOf() {
+  if (!contexts.has(settings.rule)) {
+    if (contexts.size >= 2) contexts.delete(contexts.keys().next().value); // 걸러 낸 사전은 크므로 둘만 둔다
+    contexts.set(settings.rule, createContext(dict, contextOptions(dict, settings.rule)));
   }
-  return { ctx: contexts.get(cacheKey), key: modelKey(settings.rule, Boolean(options.hanbang), settings.trained === 'sparring') };
+  return { ctx: contexts.get(settings.rule), key: modelKey(settings.rule, settings.trained === 'sparring') };
 }
 
 function el(tag, props = {}, ...children) {
@@ -94,10 +86,9 @@ function wordCells(word, linkFirst) {
 
 function showLearned() {
   const n = (count) => count.toLocaleString('ko-KR');
-  const { key } = playOf($('setup'));
+  const { key } = playOf();
   const how = RULES[settings.rule].sparring ? `(${key.endsWith('-sparring') ? '스파링' : '자가 대국'})` : '';
-  const name = settings.rule === 'free' ? `자유(한방단어 ${key === 'free-hanbang' ? '켬' : '끔'})` : `${RULES[settings.rule].name}${how}`;
-  $('learned').textContent = `봇이 배운 판: ${name} ${n(fileModels[key].games)}판, 이 브라우저에서 ${n(localModels[key].games)}판`;
+  $('learned').textContent = `봇이 배운 판: ${RULES[settings.rule].name}${how} ${n(fileModels[key].games)}판, 이 브라우저에서 ${n(localModels[key].games)}판`;
 }
 
 // ── 대결 ──
@@ -106,23 +97,24 @@ let game = null;
 
 function newGame(event) {
   event?.preventDefault();
+  checkVersion();
   const form = new FormData($('setup'));
-  const rules = rulesOf($('setup'));
-  Object.assign(settings, { level: form.get('level'), first: form.get('first') }, rules);
+  Object.assign(settings, { level: form.get('level'), first: form.get('first') });
   saveSettings();
-  const play = playOf($('setup'));
+  const play = playOf();
   showLearned();
   game = {
     ctx: play.ctx,
     level: settings.level,
     first: settings.first,
-    options: settings.rule === 'free' ? rules : null, // 자유 칸에서 고른 '쓸 수 있는 말'
     key: play.key,
     model: modelFor(play.key),
     used: new Set(),
     last: null,
     given: { me: [], bot: [] },
+    over: false,
   };
+  lockHintTab();
   $('chain').replaceChildren();
   $('result').hidden = true;
   $('move').hidden = false;
@@ -137,6 +129,7 @@ function place(word, who) {
   game.used.add(word);
   game.last = lastCharOf(word);
   game.given[who].push(game.last);
+  lockHintTab();
   const name = who === 'me' ? '나' : '봇';
   const label = el('span', { className: 'who', textContent: name });
   for (const kind of kinds(game.ctx.dict.types.get(word))) label.append(el('span', { className: 'tag', textContent: kind }));
@@ -161,7 +154,7 @@ function setBusy(busy) {
   for (const control of $('move').querySelectorAll('input, button')) control.disabled = busy;
 }
 
-// 처음 10단어(각자 5번)는 한방단어를 낼 수 없다 (한방단어를 허용하는 규칙에서만 달라진다)
+// 처음 6단어(각자 3번)는 한방단어를 낼 수 없다 (한방단어를 허용하는 규칙에서만 달라진다)
 const early = () => ({ early: isEarly(game.used) });
 
 function myTurn() {
@@ -172,7 +165,7 @@ function myTurn() {
   $('start-hint').textContent = (game.last === null
     ? '아무 단어로나 시작하세요.'
     : `${startText(game.last)} 시작하는 단어를 내세요.`)
-    + (game.ctx.hanbang && isEarly(game.used) ? ' 처음 5번은 한방단어를 쓸 수 없어요.' : '');
+    + (game.ctx.hanbang && isEarly(game.used) ? ' 처음 3번은 한방단어를 쓸 수 없어요.' : '');
   setBusy(false);
   $('move-input').focus();
 }
@@ -196,15 +189,13 @@ function botTurn() {
 const REASON = {
   NOT_IN_DICT: () => '사전에 없는 단어예요.',
   NOT_IN_RULE: (word) => {
-    if (settings.rule === 'free') return '사전에 없는 단어예요.';
     if (settings.rule === 'kkt' && word.length !== 3) return '쿵쿵따는 3글자 말만 쓸 수 있어요.';
-    return `${RULES[settings.rule].name}의 사전에 없는 말이에요.`;
+    return `${RULES[settings.rule].name}의 사전에 없는 말이에요 (${RULES[settings.rule].allowed}).`;
   },
-  EXCLUDED: (word) => `이번 판에서 쓰지 않기로 한 말이에요 (${kinds(game.ctx.dict.types.get(word)).join(', ')}).`,
   WRONG_START: () => `${startText(game.last)} 시작해야 해요.`,
   USED: () => '이미 나온 단어예요.',
   HANBANG: () => '한방단어는 쓸 수 없어요.',
-  EARLY_HANBANG: () => '처음 5번은 한방단어를 쓸 수 없어요.',
+  EARLY_HANBANG: () => '처음 3번은 한방단어를 쓸 수 없어요.',
 };
 
 function submitMove(event) {
@@ -233,6 +224,8 @@ function giveUp() {
 // end: 'me-stuck'(내가 이을 말이 없음) | 'bot-stuck'(봇이 이을 말이 없음) | 'give-up'(포기)
 function finish(winner, reason, end) {
   const loser = winner === 'me' ? 'bot' : 'me';
+  game.over = true;
+  lockHintTab();
   report(winner, end);
   update(localModels[game.key], game.given[winner], game.given[loser]);
   storage.set(storageKey(game.key), JSON.stringify(localModels[game.key]));
@@ -248,7 +241,8 @@ function finish(winner, reason, end) {
 function report(winner, end) {
   if (!player) return;
   reporter.enqueue({
-    v: 1,
+    v: 2,
+    ver: VERSION, // 서버는 지금 배포된 버전의 판만 받는다
     id: player.id,
     name: player.name,
     at: new Date().toISOString(),
@@ -256,7 +250,6 @@ function report(winner, end) {
     trained: RULES[settings.rule].sparring ? settings.trained : null,
     level: game.level,
     first: game.first,
-    options: game.options,
     winner,
     end,
     words: [...game.used], // 나온 순서대로
@@ -330,6 +323,7 @@ let hints = null;
 
 function showTab(name) {
   if (!hints) return; // 대결 화면 하나뿐이다
+  if ($(`tab-${name}`).disabled) return;
   for (const tab of CHOICES.tab) {
     const on = tab === name;
     $(`tab-${tab}`).setAttribute('aria-selected', on);
@@ -340,18 +334,26 @@ function showTab(name) {
   saveSettings();
 }
 
+// 봇과 대결하는 동안(첫 단어가 나온 뒤 판이 끝나기 전)에는 추천 탭에 들어갈 수 없다.
+function lockHintTab() {
+  if (!hints) return;
+  const locked = game.used.size > 0 && !game.over;
+  $('tab-hint').disabled = locked;
+  $('tab-hint').title = locked ? '대결이 끝나면 볼 수 있어요' : '';
+}
+
 // ── 룰(칸) ──
 
 // 룰을 바꾸면 사전과 모델이 통째로 바뀌므로 판과 추천 기록을 새로 시작한다.
 function showRule(rule) {
   settings.rule = rule;
   saveSettings();
-  document.querySelector('main').dataset.rule = rule; // 자유 칸이 아니면 '쓸 수 있는 말' 옵션을 감춘다
   for (const button of $('rulebar').querySelectorAll('button')) {
     const on = button.value === rule;
     button.setAttribute('aria-pressed', on);
   }
   $('rule-note').textContent = RULES[rule].note;
+  $('allowed').textContent = RULES[rule].allowed; // 맨 위에 '명사, 형용사, 부사 사용 가능'처럼 보여 준다
   $('trainbox').hidden = !RULES[rule].sparring; // 모델이 하나뿐인 칸에서는 고를 것이 없다
   showTrained(settings.trained);
 }
@@ -394,6 +396,7 @@ function wire() {
     document.querySelector('.tabs').addEventListener('keydown', (event) => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       const next = settings.tab === 'play' ? 'hint' : 'play';
+      if ($(`tab-${next}`).disabled) return;
       showTab(next);
       $(`tab-${next}`).focus();
     });
@@ -405,6 +408,30 @@ function wire() {
   document.querySelector('main').addEventListener('copy', (event) => {
     if (!(event.target instanceof HTMLInputElement)) event.preventDefault();
   });
+}
+
+// ── 업데이트 잠금 ──
+// 배포할 때 공개 사이트의 version.json 을 먼저 잠그고(locked), 새 파일을 올리며 새 버전으로 푼다(tools/deploy.mjs).
+// 잠겨 있거나 이 화면이 옛 버전이면 게임을 막는다. 읽지 못하면(오프라인, 개발 중) 막지 않는다.
+async function checkVersion() {
+  if (VERSION === 'dev') return;
+  let live;
+  try {
+    const response = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!response.ok) return;
+    live = await response.json();
+  } catch { return; }
+  if (live.locked) showLock('업데이트 중이에요', '앱과 웹을 새 버전으로 바꾸고 있어요. 잠시 뒤에 다시 확인해 주세요.', '다시 확인', checkVersion);
+  else if (live.version !== VERSION) showLock('새 버전이 나왔어요', '새로 고친 뒤에 계속할 수 있어요.', '새로 고침', () => location.reload());
+  else if ($('lock-dialog').open) $('lock-dialog').close();
+}
+
+function showLock(title, text, action, onClick) {
+  $('lock-title').textContent = title;
+  $('lock-text').textContent = text;
+  $('lock-action').textContent = action;
+  $('lock-action').onclick = onClick;
+  if (!$('lock-dialog').open) $('lock-dialog').showModal();
 }
 
 // ── 앱으로 쓰기 ──
@@ -453,7 +480,6 @@ async function init() {
   $('setup').elements.first.value = settings.first;
   // 추천 화면 코드는 첫 화면에 추천 탭이 있을 때만 불러온다
   if ($('panel-hint')) hints = (await import('./hint.js')).setupHints({ $, el, settings, playOf, modelFor, startText, fillDef, TYPE_LABEL });
-  for (const form of [$('setup'), $('hint-form')].filter(Boolean)) for (const name of RULE_NAMES) form.elements[name].checked = settings[name];
   buildRuleBar();
   buildTrainBar();
   showRule(settings.rule);
@@ -466,6 +492,9 @@ async function init() {
   showPlayer();
   if (!player) askName();
   reporter.flush(); // 전에 못 보낸 판
+  $('lock-dialog').addEventListener('cancel', (event) => event.preventDefault()); // Esc 로 닫지 못하게
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
+  setInterval(checkVersion, 2 * 60 * 1000);
   // 서비스 워커가 켜지기 전에 받은 파일(이 화면, 스크립트, 사전, 모델)도 저장해 두게 목록을 넘긴다
   navigator.serviceWorker?.ready.then(({ active }) => active.postMessage(
     [location.href, ...performance.getEntriesByType('resource').map((entry) => entry.name)],

@@ -15,7 +15,10 @@ self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim(
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET' || !mine(request.url)) return; // 글꼴 같은 다른 사이트 요청은 브라우저에 맡긴다
-  event.respondWith(fetch(request).then((response) => {
+  if (new URL(request.url).pathname.endsWith('/version.json')) return; // 배포 상태는 늘 새로 읽어야 해서 저장하지 않는다
+  // HTTP 캐시(GitHub Pages 는 10분)를 다시 확인해, 새 버전이 나왔을 때 새로 고치면 바로 새 파일이 온다.
+  // 페이지 이동 요청에는 옵션을 붙일 수 없어 그대로 보낸다 (새로 고침이 알아서 다시 확인한다).
+  event.respondWith(fetch(request, request.mode === 'navigate' ? undefined : { cache: 'no-cache' }).then((response) => {
     if (response.ok) {
       const copy = response.clone();
       event.waitUntil(store((cache) => cache.put(request, copy)));

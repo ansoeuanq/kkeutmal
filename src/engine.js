@@ -125,9 +125,9 @@ function analyze(dict, hanbang, dead) {
 
 const allowed = (ctx, word) => ctx.hanbang || !ctx.dead.has(lastCharOf(word));
 
-// 판의 처음 10단어(사람·봇 각자 5번) 동안은 한방단어를 낼 수 없다. 한방단어를 허용하는 규칙에서만 달라진다.
+// 판의 처음 6단어(사람·봇 각자 3번) 동안은 한방단어를 낼 수 없다. 한방단어를 허용하는 규칙에서만 달라진다.
 // 대결 화면과 자가 대국이 { early: isEarly(used) } 로 넘긴다. 추천 탭은 다른 게임용이라 넘기지 않는다.
-export const EARLY_PLIES = 10;
+export const EARLY_PLIES = 6;
 export const isEarly = (used) => used.size < EARLY_PLIES;
 const earlyBlocked = (ctx, end, early) => early && ctx.dead.has(end);
 
