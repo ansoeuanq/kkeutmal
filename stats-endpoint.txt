@@ -1,1 +1,1 @@
-https://insider-ebooks-engage-saturday.trycloudflare.com
+https://api.trycloudflare.com
