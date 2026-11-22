@@ -1,1 +1,1 @@
-https://mpeg-upgrades-scientist-cutting.trycloudflare.com
+https://api.trycloudflare.com
