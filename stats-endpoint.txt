@@ -1,1 +1,1 @@
-https://tour-victoria-maritime-pet.trycloudflare.com
+https://api.trycloudflare.com
