@@ -1,1 +1,1 @@
-https://api.trycloudflare.com
+https://dependence-rich-ranch-combat.trycloudflare.com
