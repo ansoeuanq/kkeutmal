@@ -1,1 +1,1 @@
-https://api.trycloudflare.com
+https://usr-payment-plug-consisting.trycloudflare.com
