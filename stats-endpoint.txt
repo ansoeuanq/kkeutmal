@@ -1,1 +1,1 @@
-https://mine-pre-wanted-open.trycloudflare.com
+https://api.trycloudflare.com
