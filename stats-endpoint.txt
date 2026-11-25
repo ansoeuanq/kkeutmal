@@ -1,1 +1,1 @@
-https://hdtv-collecting-nevada-ribbon.trycloudflare.com
+https://api.trycloudflare.com
