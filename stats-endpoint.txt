@@ -1,1 +1,1 @@
-https://api.trycloudflare.com
+https://joshua-syntax-plates-magical.trycloudflare.com
