@@ -1,1 +1,1 @@
-https://happiness-cons-system-constitute.trycloudflare.com
+https://api.trycloudflare.com
